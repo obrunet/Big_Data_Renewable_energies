@@ -26,7 +26,7 @@ Finalités de cette étude :
 
 ## Déroulé du projet / grandes phases : 
 
--	00.[Informations générales & organisation](https://github.com/obrunet/Big_Data_Renewable_energies/tree/master/00_infos) :
+-	00.[Informations générales & organisation](https://github.com/obrunet/Big_Data_Renewable_energies/tree/master/00_infos_organisation) :
 	- fiche projet : contexte, use cases & perspectives
 	- commandes shell et préconisations pour le travail d'équipe
 
@@ -51,7 +51,7 @@ Finalités de cette étude :
 	- Analyse la part des EnR et leurs évolutions dans le temps selon les zones géographiques
 	- Analyse exploratoire des données de rendements des installations solaires et éoliennes
 
--	05.[Modèle prédictif de machine learning avec Spark](https://github.com/obrunet/Big_Data_Renewable_energies/tree/master/05_spark_ML)
+-	05.[Modèle prédictif de machine learning avec Spark](https://github.com/obrunet/Big_Data_Renewable_energies/tree/master/05_machine_learning)
     - Nettoyage (valeurs aberrantes, manquantes)
     - Corrélation entre features
     - Entrainement de différents modèles de machine learning (notamment de deep learning)
