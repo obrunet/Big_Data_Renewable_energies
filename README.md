@@ -1,4 +1,4 @@
-## La data au service de la transition énergétique - cas particuliers du solaire et de l'éolien
+## La data au service de la transition énergétique - cas particuliers des énergies solaire et éolienne
 
 ## Contexte
 
