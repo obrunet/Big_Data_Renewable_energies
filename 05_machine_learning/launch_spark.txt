@@ -1,0 +1,27 @@
+//Travailler avec spark 
+//on peut lancer l'image 
+root@fitec-ThinkPad-P52s:~# docker pull jupyter/all-spark-notebook
+ et puis 
+//lancer jupyter
+root@fitec-ThinkPad-P52s:~# docker run -it --rm -p 8888:8888 jupyter/all-spark-notebook
+//copier l' url et la lancer sur un moteur de recherche
+
+ou bien 
+//utiliser un tar 
+root@fitec-ThinkPad-P52s:/home/fitec# sudo docker load -i /home/fitec/all-spark-notebook.tar
+//et puis lancer jupyter
+root@fitec-ThinkPad-P52s:~# docker run -it --rm -p 8888:8888 jupyter/all-spark-notebook
+//copier l'url et le lancer sur un moteur de recherche
+Serving notebooks from local directory: /home/jovyan
+0 active kernels
+The Jupyter Notebook is running at:
+http://(1723a73c6537 or 127.0.0.1):8888/?token=6fb594fefefc25ec36241de6c282b494dacfe49a8594fae1
+
+// pour installer les bibliothèques graphiques pandas et autres, il faudra les installer sur le local directory /home/jovyan
+fitec@fitec-ThinkPad-P52s:~$ sudo -i 
+[sudo] Mot de passe de fitec : 
+root@fitec-ThinkPad-P52s:~# docker ps
+CONTAINER ID        IMAGE                        COMMAND                  CREATED             STATUS              PORTS                    NAMES
+e45a138913f1        jupyter/all-spark-notebook   "tini -g -- start-no…"   12 minutes ago      Up 12 minutes       0.0.0.0:8888->8888/tcp   compassionate_joliot
+root@fitec-ThinkPad-P52s:~# docker exec -it e45a138913f1 /bin/bash
+jovyan@e45a138913f1:~$ pip install plotly
