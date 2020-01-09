@@ -1,0 +1,16 @@
+Product Owner : Yassine
+Scrum Master : une personne de l'équipe qui change à tour de rôle dans l'équipe
+
+
+- Backlog global : lister toutes les démarches (détails fin) du projet
+- Sprint : sur une semaine
+
+
+- Lundi matin : lister les sujets prioritaires sur lesquels on va travailler dans la semaine
+	-S1 : 4 points - Flora 
+	-S2 : 2 points - Hamza
+	-S3 : 1 points - Sabrina 
+	-S4 : 4 points - Olivier
+- Backlog du Sprint le vendredi / review : 
+	- lister les sujets clos ou restants ouverts de la semaine
+	- voir les pistes d'amélioration ou les difficultés restantes

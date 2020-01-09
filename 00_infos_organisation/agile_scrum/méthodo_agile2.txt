@@ -1,0 +1,15 @@
+Product Owner : Yassine (établit la priorité des fonctionnalités à développer ou à corriger, et  valide les fonctionnalités terminées.)
+Scrum Master : une personne de l'équipe qui change à tour de rôle dans l'équipe
+
+
+- Product Backlog : Les points importants à l'élaboration du projet
+- Sprint Backlog : plan détaillé de la réalisation de l'objectif du Sprint (lister les sujets prioritaires sur lesquels on va travailler dans la semaine. se faisant tous les lundis)
+
+-Equipe
+	-S1 : 4 points - Flora 
+	-S2 : 2 points - Hamza
+	-S3 : 1 points - Sabrina 
+	-S4 : 4 points - Olivier
+- Sprint Review le vendredi / review : 
+	- lister les sujets clos ou restants ouverts de la semaine
+	- voir les pistes d'amélioration ou les difficultés restantes

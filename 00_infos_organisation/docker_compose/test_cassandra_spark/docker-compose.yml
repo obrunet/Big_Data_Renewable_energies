@@ -1,0 +1,22 @@
+version: "3"
+services:
+  spark:
+    image: jupyter/all-spark-notebook
+    container_name: spark_container
+    ports:
+      - 8888:8888
+    volumes:
+      - ~/cloudera-quickstart-vm-docker
+  cassandra:
+    image: cassandra
+    container_name: cassandra_container
+    depends_on:
+      - spark
+    ports:
+      - 7199:7199
+      - 7000:7000
+      - 7001:7001
+      - 9160:9160
+      - 9042:9042
+    volumes:
+      - ~/cloudera-quickstart-vm-docker

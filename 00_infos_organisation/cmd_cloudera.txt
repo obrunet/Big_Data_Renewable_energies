@@ -1,0 +1,20 @@
+//lancer le docker de cloudera
+//voir les containers ouverts
+root@fitec-ThinkPad-P52s:~# docker ps -a
+//arreter un container qui est sur le meme port qu'un container de cloudera qu'on veut démarrer
+root@fitec-ThinkPad-P52s:~# docker stop id_container
+//demarrer le container de cloudera
+root@fitec-ThinkPad-P52s:~# docker start id_cloudera
+//lancer l'execution decloudera
+root@fitec-ThinkPad-P52s:~# docker exec -ti cloudera bash
+ou //
+root@fitec-ThinkPad-P52s:~# docker run --name=cloudera --hostname=quickstart1.cloudera --cpus=4 -m=8g --privileged=true -t -i -v `pwd`:/src --publish-all=true -p 8844:8844 -p 7180:7180 cloudera/quickstart /usr/bin/docker-quickstart
+
+//passer au mode cloudera
+[root@quickstart /]# su cloudera
+//créer un dossier dans hdfs
+[cloudera@quickstart src]$ hdfs dfs -mkdir -p datasets_ener_nouv/world_bank
+//lister les dossiers
+[cloudera@quickstart src]$ hdfs dfs -ls 
+//copier une source.csv dans hdfs
+[cloudera@quickstart src]$ hdfs dfs -put  conso_energ_fossile.csv datasets_ener_nouv/world_bank/
