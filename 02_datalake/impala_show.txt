@@ -1,0 +1,857 @@
+SHOW Statement
+The SHOW statement is a flexible way to get information about different types of Impala objects.
+
+Syntax:
+
+SHOW DATABASES [[LIKE] 'pattern']
+SHOW SCHEMAS [[LIKE] 'pattern'] - an alias for SHOW DATABASES
+SHOW TABLES [IN database_name] [[LIKE] 'pattern']
+SHOW [AGGREGATE | ANALYTIC] FUNCTIONS [IN database_name] [[LIKE] 'pattern']
+SHOW CREATE TABLE [database_name].table_name
+SHOW CREATE VIEW [database_name].view_name
+SHOW TABLE STATS [database_name.]table_name
+SHOW COLUMN STATS [database_name.]table_name
+SHOW PARTITIONS [database_name.]table_name
+SHOW [RANGE] PARTITIONS [database_name.]table_name
+SHOW FILES IN [database_name.]table_name [PARTITION (key_col_expression [, key_col_expression]]
+
+SHOW ROLES
+SHOW CURRENT ROLES
+SHOW ROLE GRANT GROUP group_name
+
+SHOW GRANT USER user_name ON SERVER
+SHOW GRANT USER user_name ON DATABASE database_name
+SHOW GRANT USER user_name ON TABLE database_name.table_name
+SHOW GRANT USER user_name ON URI uri
+SHOW GRANT USER user_name ON COLUMN database_name.table_name.column_name
+The following statements are supported only when Impala uses Sentry to manage authorization.
+
+SHOW GRANT USER user_name
+
+SHOW GRANT ROLE role_name
+SHOW GRANT ROLE role_name ON SERVER
+SHOW GRANT ROLE role_name ON DATABASE database_name
+SHOW GRANT ROLE role_name ON TABLE database_name.table_name
+SHOW GRANT ROLE role_name ON URI uri
+SHOW GRANT ROLE role_name ON COLUMN database_name.table_name.column_name
+The following statements are supported only when Impala uses Ranger to manage authorization.
+
+SHOW GRANT GROUP group_name ON SERVER
+SHOW GRANT GROUP group_name ON DATABASE database_name
+SHOW GRANT GROUP group_name ON TABLE database_name.table_name
+SHOW GRANT GROUP group_name ON URI uri
+SHOW GRANT GROUP group_name ON COLUMN database_name.table_name.column_name
+Issue a SHOW object_type statement to see the appropriate objects in the current database, or SHOW object_type IN database_name to see objects in a specific database.
+
+The optional pattern argument is a quoted string literal, using Unix-style * wildcards and allowing | for alternation. The preceding LIKE keyword is also optional. All object names are stored in lowercase, so use all lowercase letters in the pattern string. For example:
+
+SHOW DATABASES 'a*';
+SHOW DATABASES LIKE 'a*';
+SHOW TABLES IN some_db LIKE '*fact*';
+USE some_db;
+SHOW TABLES '*dim*|*fact*';
+Cancellation: Cannot be cancelled.
+
+Parent topic: Impala SQL Statements
+SHOW FILES Statement
+The SHOW FILES statement displays the files that constitute a specified table, or a partition within a partitioned table. This syntax is available in Impala 2.2 and higher only. The output includes the names of the files, the size of each file, and the applicable partition for a partitioned table. The size includes a suffix of B for bytes, MB for megabytes, and GB for gigabytes.
+
+In Impala 2.8 and higher, you can use general expressions with operators such as <, IN, LIKE, and BETWEEN in the PARTITION clause, instead of only equality operators. For example:
+
+show files in sample_table partition (j < 5);
+show files in sample_table partition (k = 3, l between 1 and 10);
+show files in sample_table partition (month like 'J%');
+
+Note: This statement applies to tables and partitions stored on HDFS, or in the Amazon Simple Storage System (S3). It does not apply to views. It does not apply to tables mapped onto HBase or Kudu, because those data management systems do not use the same file-based storage layout.
+Usage notes:
+
+You can use this statement to verify the results of your ETL process: that is, that the expected files are present, with the expected sizes. You can examine the file information to detect conditions such as empty files, missing files, or inefficient layouts due to a large number of small files. When you use INSERT statements to copy from one table to another, you can see how the file layout changes due to file format conversions, compaction of small input files into large data blocks, and multiple output files from parallel queries and partitioned inserts.
+
+The output from this statement does not include files that Impala considers to be hidden or invisible, such as those whose names start with a dot or an underscore, or that end with the suffixes .copying or .tmp.
+
+The information for partitioned tables complements the output of the SHOW PARTITIONS statement, which summarizes information about each partition. SHOW PARTITIONS produces some output for each partition, while SHOW FILES does not produce any output for empty partitions because they do not include any data files.
+
+HDFS permissions:
+
+The user ID that the impalad daemon runs under, typically the impala user, must have read permission for all the table files, read and execute permission for all the directories that make up the table, and execute permission for the database directory and all its parent directories.
+
+Examples:
+
+The following example shows a SHOW FILES statement for an unpartitioned table using text format:
+
+[localhost:21000] > create table unpart_text (x bigint, s string);
+[localhost:21000] > insert into unpart_text (x, s) select id, name
+                  > from oreilly.sample_data limit 20e6;
+[localhost:21000] > show files in unpart_text;
++------------------------------------------------------------------------------+----------+-----------+
+| path                                                                         | size     | partition |
++------------------------------------------------------------------------------+----------+-----------+
+| hdfs://impala_data_dir/show_files.db/unpart_text/35665776ef85cfaf_1012432410_data.0. | 448.31MB |           |
++------------------------------------------------------------------------------+----------+-----------+
+[localhost:21000] > insert into unpart_text (x, s) select id, name from oreilly.sample_data limit 100e6;
+[localhost:21000] > show files in unpart_text;
++--------------------------------------------------------------------------------------+----------+-----------+
+| path                                                                                 | size     | partition |
++--------------------------------------------------------------------------------------+----------+-----------+
+| hdfs://impala_data_dir/show_files.db/unpart_text/35665776ef85cfaf_1012432410_data.0. | 448.31MB |           |
+| hdfs://impala_data_dir/show_files.db/unpart_text/ac3dba252a8952b8_1663177415_data.0. | 2.19GB   |           |
++--------------------------------------------------------------------------------------+----------+-----------+
+This example illustrates how, after issuing some INSERT ... VALUES statements, the table now contains some tiny files of just a few bytes. Such small files could cause inefficient processing of parallel queries that are expecting multi-megabyte input files. The example shows how you might compact the small files by doing an INSERT ... SELECT into a different table, possibly converting the data to Parquet in the process:
+
+[localhost:21000] > insert into unpart_text values (10,'hello'), (20, 'world');
+[localhost:21000] > insert into unpart_text values (-1,'foo'), (-1000, 'bar');
+[localhost:21000] > show files in unpart_text;
++--------------------------------------------------------------------------------------+----------+
+| path                                                                                 | size     |
++--------------------------------------------------------------------------------------+----------+
+| hdfs://impala_data_dir/show_files.db/unpart_text/4f11b8bdf8b6aa92_238145083_data.0.  | 18B
+| hdfs://impala_data_dir/show_files.db/unpart_text/35665776ef85cfaf_1012432410_data.0. | 448.31MB
+| hdfs://impala_data_dir/show_files.db/unpart_text/ac3dba252a8952b8_1663177415_data.0. | 2.19GB
+| hdfs://impala_data_dir/show_files.db/unpart_text/cfb8252452445682_1868457216_data.0. | 17B
++--------------------------------------------------------------------------------------+----------+
+[localhost:21000] > create table unpart_parq stored as parquet as select * from unpart_text;
++---------------------------+
+| summary                   |
++---------------------------+
+| Inserted 120000002 row(s) |
++---------------------------+
+[localhost:21000] > show files in unpart_parq;
++------------------------------------------------------------------------------------------+----------+
+| path                                                                                     | size     |
++------------------------------------------------------------------------------------------+----------+
+| hdfs://impala_data_dir/show_files.db/unpart_parq/60798d96ba630184_549959007_data.0.parq  | 255.36MB |
+| hdfs://impala_data_dir/show_files.db/unpart_parq/60798d96ba630184_549959007_data.1.parq  | 178.52MB |
+| hdfs://impala_data_dir/show_files.db/unpart_parq/60798d96ba630185_549959007_data.0.parq  | 255.37MB |
+| hdfs://impala_data_dir/show_files.db/unpart_parq/60798d96ba630185_549959007_data.1.parq  | 57.71MB  |
+| hdfs://impala_data_dir/show_files.db/unpart_parq/60798d96ba630186_2141167244_data.0.parq | 255.40MB |
+| hdfs://impala_data_dir/show_files.db/unpart_parq/60798d96ba630186_2141167244_data.1.parq | 175.52MB |
+| hdfs://impala_data_dir/show_files.db/unpart_parq/60798d96ba630187_1006832086_data.0.parq | 255.40MB |
+| hdfs://impala_data_dir/show_files.db/unpart_parq/60798d96ba630187_1006832086_data.1.parq | 214.61MB |
++------------------------------------------------------------------------------------------+----------+
+The following example shows a SHOW FILES statement for a partitioned text table with data in two different partitions, and two empty partitions. The partitions with no data are not represented in the SHOW FILES output.
+
+[localhost:21000] > create table part_text (x bigint, y int, s string)
+                                        > partitioned by (year bigint, month bigint, day bigint);
+[localhost:21000] > insert overwrite part_text (x, y, s) partition (year=2014,month=1,day=1)
+                  > select id, val, name from oreilly.normalized_parquet
+where id between 1 and 1000000;
+[localhost:21000] > insert overwrite part_text (x, y, s) partition (year=2014,month=1,day=2)
+                  > select id, val, name from oreilly.normalized_parquet
+                  > where id between 1000001 and 2000000;
+[localhost:21000] > alter table part_text add partition (year=2014,month=1,day=3);
+[localhost:21000] > alter table part_text add partition (year=2014,month=1,day=4);
+[localhost:21000] > show partitions part_text;
++-------+-------+-----+-------+--------+---------+--------------+-------------------+--------+-------------------+
+| year  | month | day | #Rows | #Files | Size    | Bytes Cached | Cache Replication | Format | Incremental stats |
++-------+-------+-----+-------+--------+---------+--------------+-------------------+--------+-------------------+
+| 2014  | 1     | 1   | -1    | 4      | 25.16MB | NOT CACHED   | NOT CACHED        | TEXT   | false             |
+| 2014  | 1     | 2   | -1    | 4      | 26.22MB | NOT CACHED   | NOT CACHED        | TEXT   | false             |
+| 2014  | 1     | 3   | -1    | 0      | 0B      | NOT CACHED   | NOT CACHED        | TEXT   | false             |
+| 2014  | 1     | 4   | -1    | 0      | 0B      | NOT CACHED   | NOT CACHED        | TEXT   | false             |
+| Total |       |     | -1    | 8      | 51.38MB | 0B           |                   |        |                   |
++-------+-------+-----+-------+--------+---------+--------------+-------------------+--------+-------------------+
+[localhost:21000] > show files in part_text;
++---------------------------------------------------------------------------------------------------------+--------+-------------------------+
+| path                                                                                                    | size   | partition               |
++---------------------------------------------------------------------------------------------------------+--------+-------------------------+
+| hdfs://impala_data_dir/show_files.db/part_text/year=2014/month=1/day=1/80732d9dc80689f_1418645991_data.0.  | 5.77MB | year=2014/month=1/day=1 |
+| hdfs://impala_data_dir/show_files.db/part_text/year=2014/month=1/day=1/80732d9dc8068a0_1418645991_data.0.  | 6.25MB | year=2014/month=1/day=1 |
+| hdfs://impala_data_dir/show_files.db/part_text/year=2014/month=1/day=1/80732d9dc8068a1_147082319_data.0.   | 7.16MB | year=2014/month=1/day=1 |
+| hdfs://impala_data_dir/show_files.db/part_text/year=2014/month=1/day=1/80732d9dc8068a2_2111411753_data.0.  | 5.98MB | year=2014/month=1/day=1 |
+| hdfs://impala_data_dir/show_files.db/part_text/year=2014/month=1/day=2/21a828cf494b5bbb_501271652_data.0.  | 6.42MB | year=2014/month=1/day=2 |
+| hdfs://impala_data_dir/show_files.db/part_text/year=2014/month=1/day=2/21a828cf494b5bbc_501271652_data.0.  | 6.62MB | year=2014/month=1/day=2 |
+| hdfs://impala_data_dir/show_files.db/part_text/year=2014/month=1/day=2/21a828cf494b5bbd_1393490200_data.0. | 6.98MB | year=2014/month=1/day=2 |
+| hdfs://impala_data_dir/show_files.db/part_text/year=2014/month=1/day=2/21a828cf494b5bbe_1393490200_data.0. | 6.20MB | year=2014/month=1/day=2 |
++---------------------------------------------------------------------------------------------------------+--------+-------------------------+
+The following example shows a SHOW FILES statement for a partitioned Parquet table. The number and sizes of files are different from the equivalent partitioned text table used in the previous example, because INSERT operations for Parquet tables are parallelized differently than for text tables. (Also, the amount of data is so small that it can be written to Parquet without involving all the hosts in this 4-node cluster.)
+
+[localhost:21000] > create table part_parq (x bigint, y int, s string) partitioned by (year bigint, month bigint, day bigint) stored as parquet;
+[localhost:21000] > insert into part_parq partition (year,month,day) select x, y, s, year, month, day from partitioned_text;
+[localhost:21000] > show partitions part_parq;
++-------+-------+-----+-------+--------+---------+--------------+-------------------+---------+-------------------+
+| year  | month | day | #Rows | #Files | Size    | Bytes Cached | Cache Replication | Format  | Incremental stats |
++-------+-------+-----+-------+--------+---------+--------------+-------------------+---------+-------------------+
+| 2014  | 1     | 1   | -1    | 3      | 17.89MB | NOT CACHED   | NOT CACHED        | PARQUET | false             |
+| 2014  | 1     | 2   | -1    | 3      | 17.89MB | NOT CACHED   | NOT CACHED        | PARQUET | false             |
+| Total |       |     | -1    | 6      | 35.79MB | 0B           |                   |         |                   |
++-------+-------+-----+-------+--------+---------+--------------+-------------------+---------+-------------------+
+[localhost:21000] > show files in part_parq;
++-----------------------------------------------------------------------------------------------+--------+-------------------------+
+| path                                                                                          | size   | partition               |
++-----------------------------------------------------------------------------------------------+--------+-------------------------+
+| hdfs://impala_data_dir/show_files.db/part_parq/year=2014/month=1/day=1/1134113650_data.0.parq | 4.49MB | year=2014/month=1/day=1 |
+| hdfs://impala_data_dir/show_files.db/part_parq/year=2014/month=1/day=1/617567880_data.0.parq  | 5.14MB | year=2014/month=1/day=1 |
+| hdfs://impala_data_dir/show_files.db/part_parq/year=2014/month=1/day=1/2099499416_data.0.parq | 8.27MB | year=2014/month=1/day=1 |
+| hdfs://impala_data_dir/show_files.db/part_parq/year=2014/month=1/day=2/945567189_data.0.parq  | 8.80MB | year=2014/month=1/day=2 |
+| hdfs://impala_data_dir/show_files.db/part_parq/year=2014/month=1/day=2/2145850112_data.0.parq | 4.80MB | year=2014/month=1/day=2 |
+| hdfs://impala_data_dir/show_files.db/part_parq/year=2014/month=1/day=2/665613448_data.0.parq  | 4.29MB | year=2014/month=1/day=2 |
++-----------------------------------------------------------------------------------------------+--------+-------------------------+
+The following example shows output from the SHOW FILES statement for a table where the data files are stored in Amazon S3:
+
+[localhost:21000] > show files in s3_testing.sample_data_s3;
++-----------------------------------------------------------------------+---------+
+| path                                                                  | size    |
++-----------------------------------------------------------------------+---------+
+| s3a://impala-demo/sample_data/e065453cba1988a6_1733868553_data.0.parq | 24.84MB |
++-----------------------------------------------------------------------+---------+
+SHOW ROLES Statement
+The SHOW ROLES statement displays roles. This syntax is available in Impala 2.0 and later only, when you are using the Sentry authorization framework along with the Sentry service, as described in Managing Privileges.
+
+Security considerations:
+
+When authorization is enabled, the output of the SHOW statement only shows those objects for which you have the privilege to view. If you believe an object exists but you cannot see it in the SHOW output, check with the system administrator if you need to be granted a new privilege for that object. See Impala Authorization for how to set up authorization and add privileges for specific objects.
+
+Examples:
+
+Depending on the roles set up within your organization by the CREATE ROLE statement, the output might look something like this:
+
+show roles;
++-----------+
+| role_name |
++-----------+
+| analyst   |
+| role1     |
+| sales     |
+| superuser |
+| test_role |
++-----------+
+HDFS permissions: This statement does not touch any HDFS files or directories, therefore no HDFS permissions are required.
+
+Related information:
+
+Impala Authorization
+
+SHOW CURRENT ROLES
+The SHOW CURRENT ROLES statement displays roles assigned to the current user. This syntax is available in Impala 2.0 and later only, when you are using the Sentry authorization framework along with the Sentry service, as described in Managing Privileges.
+
+Security considerations:
+
+When authorization is enabled, the output of the SHOW statement only shows those objects for which you have the privilege to view. If you believe an object exists but you cannot see it in the SHOW output, check with the system administrator if you need to be granted a new privilege for that object. See Impala Authorization for how to set up authorization and add privileges for specific objects.
+
+Examples:
+
+Depending on the roles set up within your organization by the CREATE ROLE statement, the output might look something like this:
+
+show current roles;
++-----------+
+| role_name |
++-----------+
+| role1     |
+| superuser |
++-----------+
+HDFS permissions: This statement does not touch any HDFS files or directories, therefore no HDFS permissions are required.
+
+Related information:
+
+Impala Authorization
+
+SHOW ROLE GRANT GROUP Statement
+The SHOW ROLE GRANT GROUP statement lists all the roles assigned to the specified group. This statement is only allowed for Sentry administrative users and others users that are part of the specified group. This syntax is available in Impala 2.0 and later only, when you are using the Sentry authorization framework along with the Sentry service, as described in Managing Privileges.
+
+Security considerations:
+
+When authorization is enabled, the output of the SHOW statement only shows those objects for which you have the privilege to view. If you believe an object exists but you cannot see it in the SHOW output, check with the system administrator if you need to be granted a new privilege for that object. See Impala Authorization for how to set up authorization and add privileges for specific objects.
+
+HDFS permissions: This statement does not touch any HDFS files or directories, therefore no HDFS permissions are required.
+
+Related information:
+
+Impala Authorization
+
+SHOW GRANT ROLE Statement
+The SHOW GRANT ROLE statement list all the grants for the given role name. This statement is only allowed for Sentry administrative users and other users that have been granted the specified role. This syntax is available in Impala 2.0 and later only, when you are using the Sentry authorization framework along with the Sentry service, as described in Managing Privileges.
+
+Security considerations:
+
+When authorization is enabled, the output of the SHOW statement only shows those objects for which you have the privilege to view. If you believe an object exists but you cannot see it in the SHOW output, check with the system administrator if you need to be granted a new privilege for that object. See Impala Authorization for how to set up authorization and add privileges for specific objects.
+
+HDFS permissions: This statement does not touch any HDFS files or directories, therefore no HDFS permissions are required.
+
+Related information:
+
+Impala Authorization
+
+SHOW GRANT USER Statement
+The SHOW GRANT USER statement shows the list of privileges for a given user. This statement is only allowed for Sentry administrative users. However, the current user can run SHOW GRANT USER for themselves.
+
+This syntax is available in Impala 3.1 and later only, when you are using the Sentry authorization framework along with the Sentry service, as described in Managing Privileges.
+
+Security considerations:
+
+When authorization is enabled, the output of the SHOW statement only shows those objects for which you have the privilege to view. If you believe an object exists but you cannot see it in the SHOW output, check with the system administrator if you need to be granted a new privilege for that object. See Impala Authorization for how to set up authorization and add privileges for specific objects.
+
+HDFS permissions: This statement does not touch any HDFS files or directories, therefore no HDFS permissions are required.
+
+Related information:
+
+Impala Authorization
+
+SHOW DATABASES
+The SHOW DATABASES statement is often the first one you issue when connecting to an instance for the first time. You typically issue SHOW DATABASES to see the names you can specify in a USE db_name statement, then after switching to a database you issue SHOW TABLES to see the names you can specify in SELECT and INSERT statements.
+
+In Impala 2.5 and higher, the output includes a second column showing any associated comment for each database.
+
+The output of SHOW DATABASES includes the special _impala_builtins database, which lets you view definitions of built-in functions, as described under SHOW FUNCTIONS.
+
+Security considerations:
+
+When authorization is enabled, the output of the SHOW statement only shows those objects for which you have the privilege to view. If you believe an object exists but you cannot see it in the SHOW output, check with the system administrator if you need to be granted a new privilege for that object. See Impala Authorization for how to set up authorization and add privileges for specific objects.
+
+Examples:
+
+This example shows how you might locate a particular table on an unfamiliar system. The DEFAULT database is the one you initially connect to; a database with that name is present on every system. You can issue SHOW TABLES IN db_name without going into a database, or SHOW TABLES once you are inside a particular database.
+
+[localhost:21000] > show databases;
++------------------+----------------------------------------------+
+| name             | comment                                      |
++------------------+----------------------------------------------+
+| _impala_builtins | System database for Impala builtin functions |
+| default          | Default Hive database                        |
+| file_formats     |                                              |
++------------------+----------------------------------------------+
+Returned 3 row(s) in 0.02s
+[localhost:21000] > show tables in file_formats;
++--------------------+
+| name               |
++--------------------+
+| parquet_table      |
+| rcfile_table       |
+| sequencefile_table |
+| textfile_table     |
++--------------------+
+Returned 4 row(s) in 0.01s
+[localhost:21000] > use file_formats;
+[localhost:21000] > show tables like '*parq*';
++--------------------+
+| name               |
++--------------------+
+| parquet_table      |
++--------------------+
+Returned 1 row(s) in 0.01s
+HDFS permissions: This statement does not touch any HDFS files or directories, therefore no HDFS permissions are required.
+
+Related information:
+
+Overview of Impala Databases, CREATE DATABASE Statement, DROP DATABASE Statement, USE Statement SHOW TABLES Statement, SHOW FUNCTIONS Statement
+
+SHOW TABLES Statement
+Displays the names of tables. By default, lists tables in the current database, or with the IN clause, in a specified database. By default, lists all tables, or with the LIKE clause, only those whose name match a pattern with * wildcards.
+
+Security considerations:
+
+When authorization is enabled, the output of the SHOW statement only shows those objects for which you have the privilege to view. If you believe an object exists but you cannot see it in the SHOW output, check with the system administrator if you need to be granted a new privilege for that object. See Impala Authorization for how to set up authorization and add privileges for specific objects.
+
+The user ID that the impalad daemon runs under, typically the impala user, must have read and execute permissions for all directories that are part of the table. (A table could span multiple different HDFS directories if it is partitioned. The directories could be widely scattered because a partition can reside in an arbitrary HDFS directory based on its LOCATION attribute.)
+
+Examples:
+
+The following examples demonstrate the SHOW TABLES statement. If the database contains no tables, the result set is empty. If the database does contain tables, SHOW TABLES IN db_name lists all the table names. SHOW TABLES with no qualifiers lists all the table names in the current database.
+
+create database empty_db;
+show tables in empty_db;
+Fetched 0 row(s) in 0.11s
+
+create database full_db;
+create table full_db.t1 (x int);
+create table full_db.t2 like full_db.t1;
+
+show tables in full_db;
++------+
+| name |
++------+
+| t1   |
+| t2   |
++------+
+
+use full_db;
+show tables;
++------+
+| name |
++------+
+| t1   |
+| t2   |
++------+
+This example demonstrates how SHOW TABLES LIKE 'wildcard_pattern' lists table names that match a pattern, or multiple alternative patterns. The ability to do wildcard matches for table names makes it helpful to establish naming conventions for tables to conveniently locate a group of related tables.
+
+create table fact_tbl (x int);
+create table dim_tbl_1 (s string);
+create table dim_tbl_2 (s string);
+
+/* Asterisk is the wildcard character. Only 2 out of the 3 just-created tables are returned. */
+show tables like 'dim*';
++-----------+
+| name      |
++-----------+
+| dim_tbl_1 |
+| dim_tbl_2 |
++-----------+
+
+/* We are already in the FULL_DB database, but just to be sure we can specify the database name also. */
+show tables in full_db like 'dim*';
++-----------+
+| name      |
++-----------+
+| dim_tbl_1 |
+| dim_tbl_2 |
++-----------+
+
+/* The pipe character separates multiple wildcard patterns. */
+show tables like '*dim*|t*';
++-----------+
+| name      |
++-----------+
+| dim_tbl_1 |
+| dim_tbl_2 |
+| t1        |
+| t2        |
++-----------+
+HDFS permissions: This statement does not touch any HDFS files or directories, therefore no HDFS permissions are required.
+
+Related information:
+
+Overview of Impala Tables, CREATE TABLE Statement, ALTER TABLE Statement, DROP TABLE Statement, DESCRIBE Statement, SHOW CREATE TABLE Statement, SHOW TABLE STATS Statement, SHOW DATABASES, SHOW FUNCTIONS Statement
+
+SHOW CREATE TABLE Statement
+As a schema changes over time, you might run a CREATE TABLE statement followed by several ALTER TABLE statements. To capture the cumulative effect of all those statements, SHOW CREATE TABLE displays a CREATE TABLE statement that would reproduce the current structure of a table. You can use this output in scripts that set up or clone a group of tables, rather than trying to reproduce the original sequence of CREATE TABLE and ALTER TABLE statements. When creating variations on the original table, or cloning the original table on a different system, you might need to edit the SHOW CREATE TABLE output to change things such as the database name, LOCATION field, and so on that might be different on the destination system.
+
+If you specify a view name in the SHOW CREATE TABLE, it returns a CREATE VIEW statement with column names and the original SQL statement to reproduce the view. You need the VIEW_METADATA privilege on the view and SELECT privilege on all underlying views and tables to successfully run the SHOW CREATE VIEW statement for a view. The SHOW CREATE VIEW is available as an alias for SHOW CREATE TABLE.
+
+Security considerations:
+
+When authorization is enabled, the output of the SHOW statement only shows those objects for which you have the privilege to view. If you believe an object exists but you cannot see it in the SHOW output, check with the system administrator if you need to be granted a new privilege for that object. See Impala Authorization for how to set up authorization and add privileges for specific objects.
+
+HDFS permissions: This statement does not touch any HDFS files or directories, therefore no HDFS permissions are required.
+
+For Kudu tables:
+
+The column specifications include attributes such as NULL, NOT NULL, ENCODING, and COMPRESSION. If you do not specify those attributes in the original CREATE TABLE statement, the SHOW CREATE TABLE output displays the defaults that were used.
+
+The specifications of any RANGE clauses are not displayed in full. To see the definition of the range clauses for a Kudu table, use the SHOW RANGE PARTITIONS statement.
+
+The TBLPROPERTIES output reflects the Kudu master address and the internal Kudu name associated with the Impala table.
+
+
+show CREATE TABLE numeric_grades_default_letter;
++------------------------------------------------------------------------------------------------+
+| result                                                                                         |
++------------------------------------------------------------------------------------------------+
+| CREATE TABLE user.numeric_grades_default_letter (                                              |
+|   score TINYINT NOT NULL ENCODING AUTO_ENCODING COMPRESSION DEFAULT_COMPRESSION,               |
+|   letter_grade STRING NULL ENCODING AUTO_ENCODING COMPRESSION DEFAULT_COMPRESSION DEFAULT '-', |
+|   student STRING NULL ENCODING AUTO_ENCODING COMPRESSION DEFAULT_COMPRESSION,                  |
+|   PRIMARY KEY (score)                                                                          |
+| )                                                                                              |
+| PARTITION BY RANGE (score) (...)                                                          |
+| STORED AS KUDU                                                                                 |
+| TBLPROPERTIES ('kudu.master_addresses'='vd0342.example.com:7051')                              |
++------------------------------------------------------------------------------------------------+
+
+show range partitions numeric_grades_default_letter;
++--------------------+
+| RANGE (score)      |
++--------------------+
+| 0 <= VALUES < 50   |
+| 50 <= VALUES < 65  |
+| 65 <= VALUES < 80  |
+| 80 <= VALUES < 100 |
++--------------------+
+Examples:
+
+The following example shows how various clauses from the CREATE TABLE statement are represented in the output of SHOW CREATE TABLE.
+
+create table show_create_table_demo (id int comment "Unique ID", y double, s string)
+  partitioned by (year smallint)
+  stored as parquet;
+
+show create table show_create_table_demo;
++----------------------------------------------------------------------------------------+
+| result                                                                                 |
++----------------------------------------------------------------------------------------+
+| CREATE TABLE scratch.show_create_table_demo (                                          |
+|   id INT COMMENT 'Unique ID',                                                          |
+|   y DOUBLE,                                                                            |
+|   s STRING                                                                             |
+| )                                                                                      |
+| PARTITIONED BY (                                                                       |
+|   year SMALLINT                                                                        |
+| )                                                                                      |
+| STORED AS PARQUET                                                                      |
+| LOCATION 'hdfs://127.0.0.1:8020/user/hive/warehouse/scratch.db/show_create_table_demo' |
+| TBLPROPERTIES ('transient_lastDdlTime'='1418152582')                                   |
++----------------------------------------------------------------------------------------+
+The following example shows how, after a sequence of ALTER TABLE statements, the output from SHOW CREATE TABLE represents the current state of the table. This output could be used to create a matching table rather than executing the original CREATE TABLE and sequence of ALTER TABLE statements.
+
+alter table show_create_table_demo drop column s;
+alter table show_create_table_demo set fileformat textfile;
+
+show create table show_create_table_demo;
++----------------------------------------------------------------------------------------+
+| result                                                                                 |
++----------------------------------------------------------------------------------------+
+| CREATE TABLE scratch.show_create_table_demo (                                          |
+|   id INT COMMENT 'Unique ID',                                                          |
+|   y DOUBLE                                                                             |
+| )                                                                                      |
+| PARTITIONED BY (                                                                       |
+|   year SMALLINT                                                                        |
+| )                                                                                      |
+| STORED AS TEXTFILE                                                                     |
+| LOCATION 'hdfs://127.0.0.1:8020/user/hive/warehouse/demo.db/show_create_table_demo'    |
+| TBLPROPERTIES ('transient_lastDdlTime'='1418152638')                                   |
++----------------------------------------------------------------------------------------+
+Related information:
+
+CREATE TABLE Statement, DESCRIBE Statement, SHOW TABLES Statement
+
+SHOW CREATE VIEW Statement
+The SHOW CREATE VIEW, it returns a CREATE VIEW statement with column names and the original SQL statement to reproduce the view. You need the VIEW_METADATA privilege on the view and SELECT privilege on all underlying views and tables to successfully run the SHOW CREATE VIEW statement for a view.
+
+The SHOW CREATE VIEW is an alias for SHOW CREATE TABLE.
+
+SHOW TABLE STATS Statement
+The SHOW TABLE STATS and SHOW COLUMN STATS variants are important for tuning performance and diagnosing performance issues, especially with the largest tables and the most complex join queries.
+
+Any values that are not available (because the COMPUTE STATS statement has not been run yet) are displayed as -1.
+
+SHOW TABLE STATS provides some general information about the table, such as the number of files, overall size of the data, whether some or all of the data is in the HDFS cache, and the file format, that is useful whether or not you have run the COMPUTE STATS statement. A -1 in the #Rows output column indicates that the COMPUTE STATS statement has never been run for this table. If the table is partitioned, SHOW TABLE STATS provides this information for each partition. (It produces the same output as the SHOW PARTITIONS statement in this case.)
+
+The output of SHOW COLUMN STATS is primarily only useful after the COMPUTE STATS statement has been run on the table. A -1 in the #Distinct Values output column indicates that the COMPUTE STATS statement has never been run for this table. Currently, Impala always leaves the #Nulls column as -1, even after COMPUTE STATS has been run.
+
+These SHOW statements work on actual tables only, not on views.
+
+Security considerations:
+
+When authorization is enabled, the output of the SHOW statement only shows those objects for which you have the privilege to view. If you believe an object exists but you cannot see it in the SHOW output, check with the system administrator if you need to be granted a new privilege for that object. See Impala Authorization for how to set up authorization and add privileges for specific objects.
+
+Kudu considerations:
+
+Because Kudu tables do not have characteristics derived from HDFS, such as number of files, file format, and HDFS cache status, the output of SHOW TABLE STATS reflects different characteristics that apply to Kudu tables. If the Kudu table is created with the clause PARTITIONS 20, then the result set of SHOW TABLE STATS consists of 20 rows, each representing one of the numbered partitions. For example:
+
+
+show table stats kudu_table;
++--------+-----------+----------+-----------------------+------------+
+| # Rows | Start Key | Stop Key | Leader Replica        | # Replicas |
++--------+-----------+----------+-----------------------+------------+
+| -1     |           | 00000001 | host.example.com:7050 | 3          |
+| -1     | 00000001  | 00000002 | host.example.com:7050 | 3          |
+| -1     | 00000002  | 00000003 | host.example.com:7050 | 3          |
+| -1     | 00000003  | 00000004 | host.example.com:7050 | 3          |
+| -1     | 00000004  | 00000005 | host.example.com:7050 | 3          |
+...
+Impala does not compute the number of rows for each partition for Kudu tables. Therefore, you do not need to re-run COMPUTE STATS when you see -1 in the # Rows column of the output from SHOW TABLE STATS. That column always shows -1 for all Kudu tables.
+
+Examples:
+
+The following examples show how the SHOW TABLE STATS statement displays physical information about a table and the associated data files:
+
+show table stats store_sales;
++-------+--------+----------+--------------+--------+-------------------+
+| #Rows | #Files | Size     | Bytes Cached | Format | Incremental stats |
++-------+--------+----------+--------------+--------+-------------------+
+| -1    | 1      | 370.45MB | NOT CACHED   | TEXT   | false             |
++-------+--------+----------+--------------+--------+-------------------+
+
+show table stats customer;
++-------+--------+---------+--------------+--------+-------------------+
+| #Rows | #Files | Size    | Bytes Cached | Format | Incremental stats |
++-------+--------+---------+--------------+--------+-------------------+
+| -1    | 1      | 12.60MB | NOT CACHED   | TEXT   | false             |
++-------+--------+---------+--------------+--------+-------------------+
+The following example shows how, after a COMPUTE STATS or COMPUTE INCREMENTAL STATS statement, the #Rows field is now filled in. Because the STORE_SALES table in this example is not partitioned, the COMPUTE INCREMENTAL STATS statement produces regular stats rather than incremental stats, therefore the Incremental stats field remains false.
+
+compute stats customer;
++------------------------------------------+
+| summary                                  |
++------------------------------------------+
+| Updated 1 partition(s) and 18 column(s). |
++------------------------------------------+
+
+show table stats customer;
++--------+--------+---------+--------------+--------+-------------------+
+| #Rows  | #Files | Size    | Bytes Cached | Format | Incremental stats |
++--------+--------+---------+--------------+--------+-------------------+
+| 100000 | 1      | 12.60MB | NOT CACHED   | TEXT   | false             |
++--------+--------+---------+--------------+--------+-------------------+
+
+compute incremental stats store_sales;
++------------------------------------------+
+| summary                                  |
++------------------------------------------+
+| Updated 1 partition(s) and 23 column(s). |
++------------------------------------------+
+
+show table stats store_sales;
++---------+--------+----------+--------------+--------+-------------------+
+| #Rows   | #Files | Size     | Bytes Cached | Format | Incremental stats |
++---------+--------+----------+--------------+--------+-------------------+
+| 2880404 | 1      | 370.45MB | NOT CACHED   | TEXT   | false             |
++---------+--------+----------+--------------+--------+-------------------+
+HDFS permissions:
+
+The user ID that the impalad daemon runs under, typically the impala user, must have read and execute permissions for all directories that are part of the table. (A table could span multiple different HDFS directories if it is partitioned. The directories could be widely scattered because a partition can reside in an arbitrary HDFS directory based on its LOCATION attribute.) The Impala user must also have execute permission for the database directory, and any parent directories of the database directory in HDFS.
+
+Related information:
+
+COMPUTE STATS Statement, SHOW COLUMN STATS Statement
+
+See Table and Column Statistics for usage information and examples.
+
+SHOW COLUMN STATS Statement
+The SHOW TABLE STATS and SHOW COLUMN STATS variants are important for tuning performance and diagnosing performance issues, especially with the largest tables and the most complex join queries.
+
+Security considerations:
+
+When authorization is enabled, the output of the SHOW statement only shows those objects for which you have the privilege to view. If you believe an object exists but you cannot see it in the SHOW output, check with the system administrator if you need to be granted a new privilege for that object. See Impala Authorization for how to set up authorization and add privileges for specific objects.
+
+The output for SHOW COLUMN STATS includes the relevant information for Kudu tables. The information for column statistics that originates in the underlying Kudu storage layer is also represented in the metastore database that Impala uses.
+
+Examples:
+
+The following examples show the output of the SHOW COLUMN STATS statement for some tables, before the COMPUTE STATS statement is run. Impala deduces some information, such as maximum and average size for fixed-length columns, and leaves and unknown values as -1.
+
+show column stats customer;
++------------------------+--------+------------------+--------+----------+----------+
+| Column                 | Type   | #Distinct Values | #Nulls | Max Size | Avg Size |
++------------------------+--------+------------------+--------+----------+----------+
+| c_customer_sk          | INT    | -1               | -1     | 4        | 4        |
+| c_customer_id          | STRING | -1               | -1     | -1       | -1       |
+| c_current_cdemo_sk     | INT    | -1               | -1     | 4        | 4        |
+| c_current_hdemo_sk     | INT    | -1               | -1     | 4        | 4        |
+| c_current_addr_sk      | INT    | -1               | -1     | 4        | 4        |
+| c_first_shipto_date_sk | INT    | -1               | -1     | 4        | 4        |
+| c_first_sales_date_sk  | INT    | -1               | -1     | 4        | 4        |
+| c_salutation           | STRING | -1               | -1     | -1       | -1       |
+| c_first_name           | STRING | -1               | -1     | -1       | -1       |
+| c_last_name            | STRING | -1               | -1     | -1       | -1       |
+| c_preferred_cust_flag  | STRING | -1               | -1     | -1       | -1       |
+| c_birth_day            | INT    | -1               | -1     | 4        | 4        |
+| c_birth_month          | INT    | -1               | -1     | 4        | 4        |
+| c_birth_year           | INT    | -1               | -1     | 4        | 4        |
+| c_birth_country        | STRING | -1               | -1     | -1       | -1       |
+| c_login                | STRING | -1               | -1     | -1       | -1       |
+| c_email_address        | STRING | -1               | -1     | -1       | -1       |
+| c_last_review_date     | STRING | -1               | -1     | -1       | -1       |
++------------------------+--------+------------------+--------+----------+----------+
+
+show column stats store_sales;
++-----------------------+-------+------------------+--------+----------+----------+
+| Column                | Type  | #Distinct Values | #Nulls | Max Size | Avg Size |
++-----------------------+-------+------------------+--------+----------+----------+
+| ss_sold_date_sk       | INT   | -1               | -1     | 4        | 4        |
+| ss_sold_time_sk       | INT   | -1               | -1     | 4        | 4        |
+| ss_item_sk            | INT   | -1               | -1     | 4        | 4        |
+| ss_customer_sk        | INT   | -1               | -1     | 4        | 4        |
+| ss_cdemo_sk           | INT   | -1               | -1     | 4        | 4        |
+| ss_hdemo_sk           | INT   | -1               | -1     | 4        | 4        |
+| ss_addr_sk            | INT   | -1               | -1     | 4        | 4        |
+| ss_store_sk           | INT   | -1               | -1     | 4        | 4        |
+| ss_promo_sk           | INT   | -1               | -1     | 4        | 4        |
+| ss_ticket_number      | INT   | -1               | -1     | 4        | 4        |
+| ss_quantity           | INT   | -1               | -1     | 4        | 4        |
+| ss_wholesale_cost     | FLOAT | -1               | -1     | 4        | 4        |
+| ss_list_price         | FLOAT | -1               | -1     | 4        | 4        |
+| ss_sales_price        | FLOAT | -1               | -1     | 4        | 4        |
+| ss_ext_discount_amt   | FLOAT | -1               | -1     | 4        | 4        |
+| ss_ext_sales_price    | FLOAT | -1               | -1     | 4        | 4        |
+| ss_ext_wholesale_cost | FLOAT | -1               | -1     | 4        | 4        |
+| ss_ext_list_price     | FLOAT | -1               | -1     | 4        | 4        |
+| ss_ext_tax            | FLOAT | -1               | -1     | 4        | 4        |
+| ss_coupon_amt         | FLOAT | -1               | -1     | 4        | 4        |
+| ss_net_paid           | FLOAT | -1               | -1     | 4        | 4        |
+| ss_net_paid_inc_tax   | FLOAT | -1               | -1     | 4        | 4        |
+| ss_net_profit         | FLOAT | -1               | -1     | 4        | 4        |
++-----------------------+-------+------------------+--------+----------+----------+
+The following examples show the output of the SHOW COLUMN STATS statement for some tables, after the COMPUTE STATS statement is run. Now most of the -1 values are changed to reflect the actual table data. The #Nulls column remains -1 because Impala does not use the number of NULL values to influence query planning.
+
+compute stats customer;
++------------------------------------------+
+| summary                                  |
++------------------------------------------+
+| Updated 1 partition(s) and 18 column(s). |
++------------------------------------------+
+
+compute stats store_sales;
++------------------------------------------+
+| summary                                  |
++------------------------------------------+
+| Updated 1 partition(s) and 23 column(s). |
++------------------------------------------+
+
+show column stats customer;
++------------------------+--------+------------------+--------+----------+--------+
+| Column                 | Type   | #Distinct Values | #Nulls | Max Size | Avg Size
++------------------------+--------+------------------+--------+----------+--------+
+| c_customer_sk          | INT    | 139017           | -1     | 4        | 4      |
+| c_customer_id          | STRING | 111904           | -1     | 16       | 16     |
+| c_current_cdemo_sk     | INT    | 95837            | -1     | 4        | 4      |
+| c_current_hdemo_sk     | INT    | 8097             | -1     | 4        | 4      |
+| c_current_addr_sk      | INT    | 57334            | -1     | 4        | 4      |
+| c_first_shipto_date_sk | INT    | 4374             | -1     | 4        | 4      |
+| c_first_sales_date_sk  | INT    | 4409             | -1     | 4        | 4      |
+| c_salutation           | STRING | 7                | -1     | 4        | 3.1308 |
+| c_first_name           | STRING | 3887             | -1     | 11       | 5.6356 |
+| c_last_name            | STRING | 4739             | -1     | 13       | 5.9106 |
+| c_preferred_cust_flag  | STRING | 3                | -1     | 1        | 0.9656 |
+| c_birth_day            | INT    | 31               | -1     | 4        | 4      |
+| c_birth_month          | INT    | 12               | -1     | 4        | 4      |
+| c_birth_year           | INT    | 71               | -1     | 4        | 4      |
+| c_birth_country        | STRING | 205              | -1     | 20       | 8.4001 |
+| c_login                | STRING | 1                | -1     | 0        | 0      |
+| c_email_address        | STRING | 94492            | -1     | 46       | 26.485 |
+| c_last_review_date     | STRING | 349              | -1     | 7        | 6.7561 |
++------------------------+--------+------------------+--------+----------+--------+
+
+show column stats store_sales;
++-----------------------+-------+------------------+--------+----------+----------+
+| Column                | Type  | #Distinct Values | #Nulls | Max Size | Avg Size |
++-----------------------+-------+------------------+--------+----------+----------+
+| ss_sold_date_sk       | INT   | 4395             | -1     | 4        | 4        |
+| ss_sold_time_sk       | INT   | 63617            | -1     | 4        | 4        |
+| ss_item_sk            | INT   | 19463            | -1     | 4        | 4        |
+| ss_customer_sk        | INT   | 122720           | -1     | 4        | 4        |
+| ss_cdemo_sk           | INT   | 242982           | -1     | 4        | 4        |
+| ss_hdemo_sk           | INT   | 8097             | -1     | 4        | 4        |
+| ss_addr_sk            | INT   | 70770            | -1     | 4        | 4        |
+| ss_store_sk           | INT   | 6                | -1     | 4        | 4        |
+| ss_promo_sk           | INT   | 355              | -1     | 4        | 4        |
+| ss_ticket_number      | INT   | 304098           | -1     | 4        | 4        |
+| ss_quantity           | INT   | 105              | -1     | 4        | 4        |
+| ss_wholesale_cost     | FLOAT | 9600             | -1     | 4        | 4        |
+| ss_list_price         | FLOAT | 22191            | -1     | 4        | 4        |
+| ss_sales_price        | FLOAT | 20693            | -1     | 4        | 4        |
+| ss_ext_discount_amt   | FLOAT | 228141           | -1     | 4        | 4        |
+| ss_ext_sales_price    | FLOAT | 433550           | -1     | 4        | 4        |
+| ss_ext_wholesale_cost | FLOAT | 406291           | -1     | 4        | 4        |
+| ss_ext_list_price     | FLOAT | 574871           | -1     | 4        | 4        |
+| ss_ext_tax            | FLOAT | 91806            | -1     | 4        | 4        |
+| ss_coupon_amt         | FLOAT | 228141           | -1     | 4        | 4        |
+| ss_net_paid           | FLOAT | 493107           | -1     | 4        | 4        |
+| ss_net_paid_inc_tax   | FLOAT | 653523           | -1     | 4        | 4        |
+| ss_net_profit         | FLOAT | 611934           | -1     | 4        | 4        |
++-----------------------+-------+------------------+--------+----------+----------+
+HDFS permissions:
+
+The user ID that the impalad daemon runs under, typically the impala user, must have read and execute permissions for all directories that are part of the table. (A table could span multiple different HDFS directories if it is partitioned. The directories could be widely scattered because a partition can reside in an arbitrary HDFS directory based on its LOCATION attribute.) The Impala user must also have execute permission for the database directory, and any parent directories of the database directory in HDFS.
+
+Related information:
+
+COMPUTE STATS Statement, SHOW TABLE STATS Statement
+
+See Table and Column Statistics for usage information and examples.
+
+SHOW PARTITIONS Statement
+SHOW PARTITIONS displays information about each partition for a partitioned table. (The output is the same as the SHOW TABLE STATS statement, but SHOW PARTITIONS only works on a partitioned table.) Because it displays table statistics for all partitions, the output is more informative if you have run the COMPUTE STATS statement after creating all the partitions. See COMPUTE STATS Statement for details. For example, on a CENSUS table partitioned on the YEAR column:
+
+Security considerations:
+
+When authorization is enabled, the output of the SHOW statement only shows those objects for which you have the privilege to view. If you believe an object exists but you cannot see it in the SHOW output, check with the system administrator if you need to be granted a new privilege for that object. See Impala Authorization for how to set up authorization and add privileges for specific objects.
+
+Kudu considerations:
+
+The optional RANGE clause only applies to Kudu tables. It displays only the partitions defined by the RANGE clause of CREATE TABLE or ALTER TABLE.
+
+Although you can specify < or <= comparison operators when defining range partitions for Kudu tables, Kudu rewrites them if necessary to represent each range as low_bound <= VALUES < high_bound. This rewriting might involve incrementing one of the boundary values or appending a \0 for string values, so that the partition covers the same range as originally specified.
+
+Examples:
+
+The following example shows the output for a Parquet, text, or other HDFS-backed table partitioned on the YEAR column:
+
+[localhost:21000] > show partitions census;
++-------+-------+--------+------+---------+
+| year  | #Rows | #Files | Size | Format  |
++-------+-------+--------+------+---------+
+| 2000  | -1    | 0      | 0B   | TEXT    |
+| 2004  | -1    | 0      | 0B   | TEXT    |
+| 2008  | -1    | 0      | 0B   | TEXT    |
+| 2010  | -1    | 0      | 0B   | TEXT    |
+| 2011  | 4     | 1      | 22B  | TEXT    |
+| 2012  | 4     | 1      | 22B  | TEXT    |
+| 2013  | 1     | 1      | 231B | PARQUET |
+| Total | 9     | 3      | 275B |         |
++-------+-------+--------+------+---------+
+The following example shows the output for a Kudu table using the hash partitioning mechanism. The number of rows in the result set corresponds to the values used in the PARTITIONS N clause of CREATE TABLE.
+
+
+show partitions million_rows_hash;
+
++--------+-----------+----------+-----------------------+--
+| # Rows | Start Key | Stop Key | Leader Replica        | # Replicas
++--------+-----------+----------+-----------------------+--
+| -1     |           | 00000001 | n236.example.com:7050 | 3
+| -1     | 00000001  | 00000002 | n236.example.com:7050 | 3
+| -1     | 00000002  | 00000003 | n336.example.com:7050 | 3
+| -1     | 00000003  | 00000004 | n238.example.com:7050 | 3
+| -1     | 00000004  | 00000005 | n338.example.com:7050 | 3
+....
+| -1     | 0000002E  | 0000002F | n240.example.com:7050 | 3
+| -1     | 0000002F  | 00000030 | n336.example.com:7050 | 3
+| -1     | 00000030  | 00000031 | n240.example.com:7050 | 3
+| -1     | 00000031  |          | n334.example.com:7050 | 3
++--------+-----------+----------+-----------------------+--
+Fetched 50 row(s) in 0.05s
+
+The following example shows the output for a Kudu table using the range partitioning mechanism:
+
+
+show range partitions million_rows_range;
++-----------------------+
+| RANGE (id)            |
++-----------------------+
+| VALUES < "A"          |
+| "A" <= VALUES < "["   |
+| "a" <= VALUES < "{"   |
+| "{" <= VALUES < "~\0" |
++-----------------------+
+
+HDFS permissions:
+
+The user ID that the impalad daemon runs under, typically the impala user, must have read and execute permissions for all directories that are part of the table. (A table could span multiple different HDFS directories if it is partitioned. The directories could be widely scattered because a partition can reside in an arbitrary HDFS directory based on its LOCATION attribute.) The Impala user must also have execute permission for the database directory, and any parent directories of the database directory in HDFS.
+
+Related information:
+
+See Table and Column Statistics for usage information and examples.
+
+SHOW TABLE STATS Statement, Partitioning for Impala Tables
+
+SHOW FUNCTIONS Statement
+By default, SHOW FUNCTIONS displays user-defined functions (UDFs) and SHOW AGGREGATE FUNCTIONS displays user-defined aggregate functions (UDAFs) associated with a particular database. The output from SHOW FUNCTIONS includes the argument signature of each function. You specify this argument signature as part of the DROP FUNCTION statement. You might have several UDFs with the same name, each accepting different argument data types.
+
+Usage notes:
+
+In Impala 2.5 and higher, the SHOW FUNCTIONS output includes a new column, labelled is persistent. This property is true for Impala built-in functions, C++ UDFs, and Java UDFs created using the new CREATE FUNCTION syntax with no signature. It is false for Java UDFs created using the old CREATE FUNCTION syntax that includes the types for the arguments and return value. Any functions with false shown for this property must be created again by the CREATE FUNCTION statement each time the Impala catalog server is restarted. See CREATE FUNCTION for information on switching to the new syntax, so that Java UDFs are preserved across restarts. Java UDFs that are persisted this way are also easier to share across Impala and Hive.
+
+Security considerations:
+
+When authorization is enabled, the output of the SHOW statement only shows those objects for which you have the privilege to view. If you believe an object exists but you cannot see it in the SHOW output, check with the system administrator if you need to be granted a new privilege for that object. See Impala Authorization for how to set up authorization and add privileges for specific objects.
+
+HDFS permissions: This statement does not touch any HDFS files or directories, therefore no HDFS permissions are required.
+
+Examples:
+
+To display Impala built-in functions, specify the special database name _impala_builtins:
+
+show functions in _impala_builtins;
++--------------+-------------------------------------------------+-------------+---------------+
+| return type  | signature                                       | binary type | is persistent |
++--------------+-------------------------------------------------+-------------+---------------+
+| BIGINT       | abs(BIGINT)                                     | BUILTIN     | true          |
+| DECIMAL(*,*) | abs(DECIMAL(*,*))                               | BUILTIN     | true          |
+| DOUBLE       | abs(DOUBLE)                                     | BUILTIN     | true          |
+| FLOAT        | abs(FLOAT)                                      | BUILTIN     | true          |
++----------------+----------------------------------------+
+...
+
+show functions in _impala_builtins like '*week*';
++-------------+------------------------------+-------------+---------------+
+| return type | signature                    | binary type | is persistent |
++-------------+------------------------------+-------------+---------------+
+| INT         | dayofweek(TIMESTAMP)         | BUILTIN     | true          |
+| INT         | weekofyear(TIMESTAMP)        | BUILTIN     | true          |
+| TIMESTAMP   | weeks_add(TIMESTAMP, BIGINT) | BUILTIN     | true          |
+| TIMESTAMP   | weeks_add(TIMESTAMP, INT)    | BUILTIN     | true          |
+| TIMESTAMP   | weeks_sub(TIMESTAMP, BIGINT) | BUILTIN     | true          |
+| TIMESTAMP   | weeks_sub(TIMESTAMP, INT)    | BUILTIN     | true          |
++-------------+------------------------------+-------------+---------------+
+Related information:
+
+Overview of Impala Functions, Impala Built-In Functions, User-Defined Functions (UDFs), SHOW DATABASES, SHOW TABLES Statement
