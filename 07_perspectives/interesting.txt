@@ -1,0 +1,13 @@
+https://deepmind.com/blog/article/machine-learning-can-boost-value-wind-energy
+
+
+https://www.technologyreview.com/f/613036/deepmind-creates-algorithm-to-squeeze-more-out-of-wind-power/
+
+
+Google’s subsidiary DeepMind has created a machine-learning model to boost the use of wind power by predicting its likely output 36 hours ahead.
+
+Drawbacks: Although the adoption of wind power has grown thanks to cheaper turbine costs, it will always suffer from unpredictability. That limits it compared with other energy sources that can reliably deliver power at a set time.
+
+An experiment: To help solve this problem, last year DeepMind started building algorithms to boost the efficacy of Google’s wind farms in the US, according to a blog post. Researchers trained a neural network on weather forecasts and past turbine data, so it could predict power output 36 hours ahead. On this basis, the model recommends how to allocate power to the grid a full day in advance. This boosted the “value” of Google’s wind farms by about 20%, DeepMind claims, though it hasn’t really specified what form what value takes, or how it’s measured.
+
+Implications: While it’s only been tested out internally so far, it’s not hard to imagine Google hoping to sell this technology to wind farm operators. And it’s another boost to Google’s carbon-free credentials. 
